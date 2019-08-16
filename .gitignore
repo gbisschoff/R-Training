@@ -1,0 +1,7 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+/.cran
+/data/master-data-clean.csv.gz
+/data
