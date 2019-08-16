@@ -1,0 +1,29 @@
+# Attempt auto-detection of text files, as a fail-safe measure.
+
+* text=auto
+
+# Normal text files with conversion for CRLF to LF.
+
+*.R text
+*.bat text
+*.config text
+*.cs text merge=csharp
+*.csproj text merge=union
+*.packages text
+*.sh text
+*.sln text eol=crlf merge=union
+*.xml text merge=union
+
+# Binary files that should not be converted
+
+*.resx binary
+*.xls binary
+
+# OOXML documents
+
+*.doc[bmx] binary filter=ooxml
+*.dot[bmx] binary filter=ooxml
+*.pot[bmx] binary filter=ooxml
+*.ppt[bmx] binary filter=ooxml
+*.xls[bmx] binary filter=ooxml
+*.xlt[bmx] binary filter=ooxml
