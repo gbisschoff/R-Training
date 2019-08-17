@@ -17,8 +17,7 @@ add_default_indicator <- function(data){
   )
 }
 
-
-default_rates <- function(data, ..., emergence_period = 1L) {
+default_rates <- function(data, ..., emergence_period = 12L) {
   .dots = c(...) # convert the '...' to a vector
   data %>% 
     group_by(account_id) %>% 
@@ -26,10 +25,10 @@ default_rates <- function(data, ..., emergence_period = 1L) {
       lead_default_indicator = (lead(cumsum(default_indicator), n = emergence_period) - cumsum(default_indicator)) > 0
     ) %>% 
     filter(
-        !is.na(default_indicator),
-        !is.na(lead_default_indicator),
-        !is.na(account_balance),
-        account_balance > 0
+      !is.na(default_indicator),
+      !is.na(lead_default_indicator),
+      !is.na(account_balance),
+      account_balance > 0
     ) %>% 
     group_by_at(.vars = .dots) %>% 
     group_by(default_indicator, lead_default_indicator, add = TRUE) %>% 
@@ -40,69 +39,56 @@ default_rates <- function(data, ..., emergence_period = 1L) {
     select(-total, -default_indicator, -lead_default_indicator)
 }
 
-
-
 # pd modelling ----------------------------------------------------------------------------------------------------
-
-#' one month default rates. We should see that there are not many defaults from stage 1, because those are 
-#' usually fraud cases. 
+#' In this section we will see how to calculate default probabilities for portfolios that have sufficient data.
+#' We first calculate the average 12 month default rate for each period to see what the trends are over time.
+#' If the trend is stable over time this allows us to continue without having to segment on origination cohort (out
+#' of scope for this training).
 #' 
-#' We see that the default rates are quite volatile around 8% - 9%, maybe with a slight increasing trend.
-#' Volatility means we dont have enough data in that segment. This can be verified by creating a graph of number 
-#' of accounts per period and stage.
-#' We see there is a large spike in Jan 2017, this will require further investigation to identify the root cause.
-#' 
-#' The default rates however aren't IFRS 9 compliant because it does not contain a term structure. For us to add a
-#' term structure we have to segment by time on book.
+#' From the first analysis we see that the stage 2 default rates are increasing and that the default rates are very
+#' volatile. This means that we need to do further investigation (out of scope), but is likely to low data volumes.
 
 data %>%
   add_default_indicator() %>% 
-  default_rates('period', 'stage') %>% 
+  default_rates('period', 'stage', emergence_period = 12L) %>% 
   plotly::plot_ly(x = ~period, y=~default_rate, color=~stage, type = 'scatter', mode = 'line')
 
-#' To create a term structure, we segment by time on book. 
-#' We see large amounts of volatility which means that we dont have enough data in each segment.
-#' The volatility increases as time on book increases because there are less accounts in those
-#' segments - see the time-on-book distibution
-#' 
-
+#' Assuming the trends were stable and not volatile we would build a term structure by segmenting on time on book.
+#' From the analysis below we see that the term structure is very volatile due to low data volumes and becomes
+#' more volatile as time on book increases. This makes sense because the loans get paid off, thus there is less
+#' accounts past the end of the contract term.
 data %>%
   add_default_indicator() %>% 
-  default_rates('stage', 'time_on_book') %>% 
-  plotly::plot_ly(x = ~time_on_book, y=~default_rate, color = ~stage, type = 'scatter', mode = 'line')
+  default_rates('time_on_book', emergence_period = 1L) %>% 
+  plotly::plot_ly(x = ~time_on_book, y=~default_rate, type = 'scatter', mode = 'line')
 
-#' we can create less granular segmentation using bucketing. We will bucket the time on book into age
-#' buckets using the cut function, we specify that each bucket should be 12 months. From the time on 
-#' book distribution we see that we dont have enough data past 60 months so we will drop the remaining
-#' times on book
 
-data_with_age_bucket <- data %>%
-  add_age_bucket(breaks = seq(0, 60, 12), include.lowest = TRUE)
-
-data_with_age_bucket %>% 
-  group_by(product_type, age_bucket) %>% 
-  summarise(total = sum(account_balance)) %>% # change sum(account_balance) to n() so see how many accounts there are in each bucket
-  plotly::plot_ly(type = 'bar', x = ~age_bucket, color = ~product_type, y = ~total) %>% 
-  plotly::layout(barmode = 'stack')
-
-#' To build a term structure on our new age buckets we we just group by age bucket and stage.
-#' To build a 12 month PD for each age bucket we just increase the emergence period. 
-#' IMPORTANT: Remember as you increase the emergence period, more accounts will be filtered out by the
-#' !is.na(lead_default_indicator) filter. Because there are less accounts that are on book for the full 
-#' duration of the emergence period. Thus this code cant directly be used to calculate a lifetime PD.
-
-# One month default rates
-data_with_age_bucket %>% 
+#' we could group time on book into age buckets to increase the data volumes in each segment. We could also try to
+#' smooth the term structure using some form of averaging, smoothing or regression (out of scope).
+#' We can also increase or decrease the bucket size to become more accurate or less volatile.
+data %>%
+  add_age_bucket(breaks = seq(0, 60, 12), include.lowest = TRUE) %>% 
   add_default_indicator() %>% 
-  default_rates('stage', 'age_bucket', emergence_period = 1L) %>% 
-  plotly::plot_ly(x = ~age_bucket, y=~default_rate, color = ~stage, type = 'scatter', mode = 'line')
+  default_rates('age_bucket', emergence_period = 1L) %>% 
+  plotly::plot_ly(x = ~age_bucket, y=~default_rate, type = 'scatter', mode = 'line')
 
-# 12 month default rates
-data_with_age_bucket %>% 
+
+#' we could also split the term structure by age to increase accuracy. Remember the relationship between 
+#' accuracy, volatility and data volumes.
+data %>%
+  add_age_bucket(breaks = seq(0, 60, 12), include.lowest = TRUE) %>% 
   add_default_indicator() %>% 
   default_rates('stage', 'age_bucket', emergence_period = 12L) %>% 
   plotly::plot_ly(x = ~age_bucket, y=~default_rate, color = ~stage, type = 'scatter', mode = 'line')
 
-
-
+#' If we found that the there is a trend in the default rates over time we have to segment by origination date
+#' to allow for these trends. This can easily be done by just passing the origination segment along with time on book.
+#' Once again we could group origination date and time on book if data volumes dont allow for the granular segmentation
+#' or we could use some form of triangle completion on the results to increase data volumnes before doing smooting,
+#' averaging or regression.
+data %>%
+  add_default_indicator() %>% 
+  mutate(origination_date = as.character(format(origination_date, format = '%Y-%m'))) %>% 
+  default_rates('origination_date', 'time_on_book', emergence_period = 1L) %>% 
+  plotly::plot_ly(x = ~time_on_book, y=~default_rate, color = ~origination_date, type = 'scatter')
 

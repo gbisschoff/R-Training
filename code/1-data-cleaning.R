@@ -31,8 +31,8 @@ clean_data <- function(data){
       maturity_date = period_to_date(maturity_date),
       interest_rate = as.double(interest_rate),
       product_type = factor(product_type, levels = c("unauthorised overdraft", "overdraft", "loan", "leasing")),
-      arrears_status = factor(arrears_status, levels = c(1, 2, 3, 4, 5), labels = c('P', 'SM', 'D', 'L', 'SS'), ordered = TRUE),
-      stage = factor(stage, levels = c(1, 2, 3), ordered = TRUE),
+      arrears_status = factor(arrears_status, levels = c(1, 2, 3, 4, 5), labels = c('P', 'SM', 'D', 'L', 'SS')),
+      stage = factor(stage, levels = c(1, 2, 3)),
       account_balance = as.double(account_balance)
     ) %>%
       dplyr::arrange(account_id, period) %>% 
