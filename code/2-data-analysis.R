@@ -28,7 +28,8 @@ import_data = function(file_path){
 data = import_data('.data/master-data-clean.csv.gz')
 
 # basic data analysis ---------------------------------------------------------------------------------------------
-
+#' In this secion we will do some basic data analysis to see if trends and distributions are stable over
+#' time. If distributions aren't stable they need to be invesigated and catered for in the modelling.
 data %>% 
   group_by(period, product_type) %>% 
   summarise(total = sum(account_balance)) %>% 
